@@ -1,0 +1,512 @@
+---
+title: "Długość życia w poszczególnych państwach Europy (2017-2021)"
+author: "Przemysław Popowski"
+date: "26 styczeń 2024r."
+always_allow_html: true
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(DBI)
+library(knitr)
+library(rmarkdown)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(DescTools)
+library(webshot)
+library(webshot2)
+connection <- dbConnect(drv=RSQLite::SQLite(), dbname="europa.db")
+data <- dbReadTable(connection, "dlugoscZyciaEuropa")
+```
+
+# **Punkt 1 - Opis projektu**
+### Tematem projektu jest podstawowa analiza danych średniej długości życia Europejczyków w latach 2017-2021. W dokumentacji opisałem sposób zbierania danych do bazy danych, czyszczenia i przygotowania ich do potrzeb badań, pokazałem różne wizualizacje oraz przeprowadziłem ich analizę. Główną myślą, która kierowała mną do takiego tematu, była chęć zobaczenia wpływu pandemii COVID-19 na długość życia w Europie.
+
+# **Punkt 2 - Zebranie danych do bazy danych**
+### Dane pozyskałem z poniższego źródła:
+#### https://ec.europa.eu/eurostat/databrowser/view/demo_r_mlifexp/default/table?lang=en&category=demo.demomreg
+### Obejmują one średnią długość życia w 37 państwach Europy w latach 2017-2021.
+
+## **Punkt 2.1 - Struktura bazy danych**
+```{r, layout="l-body-outset", echo=FALSE}
+paged_table(data)
+```
+
+## **Punkt 2.2 - Czyszczenie danych**
+### Podane na stronie dane były już wstępnie przygotowane do dalszej analizy, nastąpiły jednak wyjątki w postaci dwóch państw:
+#### - W przypadku Wielkiej Brytanii badania obowiązują tylko do 2018 roku.
+#### - Natomiast w Turcji, posiadamy statystyki tylko do 2019 roku.
+### Czyszczenie danych będzie polegało na usunięciu znaków ":", które oznaczają brak danych i zastąpienie ich wartościami "NA". Dodatkowo musimy zamienić znaki "," oddzielające liczbę całości od ułamka na ".". Na koniec zostanie zmienić typ danych w bazie z "char" na "double" dla liczb.
+```{r, warning=FALSE}
+clear_data <- data %>%
+  mutate_if(is.character, ~ ifelse(is.na(.), NA, gsub(",", ".", gsub(":", "null", .))))
+clear_data <- clear_data %>%
+  mutate(across(-1, as.numeric))
+```
+
+## **Punkt 2.3 - Struktura bazy danych po dokonanym czyszczeniu**
+```{r, echo=FALSE}
+paged_table(clear_data)
+```
+
+# **Punkt 3 - Analiza eksploracyjna**
+## **Punkt 3.1 - Przeanalizujemy przedziały wiekowe średniej długości życia obu płci na liczbę państw z podziałem na rok**
+```{r histogram, echo=FALSE, warning=FALSE, fig.width=15, fig.height=12}
+data_for_histogram2021 <- clear_data[!is.na(clear_data$Wszyscy2021), ]
+data_for_histogram2020 <- clear_data[!is.na(clear_data$Wszyscy2020), ]
+data_for_histogram2019 <- clear_data[!is.na(clear_data$Wszyscy2019), ]
+data_for_histogram2018 <- clear_data[!is.na(clear_data$Wszyscy2018), ]
+data_for_histogram2017 <- clear_data[!is.na(clear_data$Wszyscy2017), ]
+
+data_for_histogram2021$Rok <- "2021"
+data_for_histogram2020$Rok <- "2020"
+data_for_histogram2019$Rok <- "2019"
+data_for_histogram2018$Rok <- "2018"
+data_for_histogram2017$Rok <- "2017"
+
+sections2021 <- cut( data_for_histogram2021$Wszyscy2021,
+                   breaks = c(70, 72, 74, 76, 78, 80, 82, 84, 86),
+                   include.lowest = TRUE,
+                   labels = c("70.1-72", "72.1-74", "74.1-76", "76.1-78", "78.1-80", "80.1-82", "82.1-84", "84.1-86") )
+data_for_histogram2021$sections <- sections2021
+
+sections2020 <- cut( data_for_histogram2020$Wszyscy2020,
+                   breaks = c(70, 72, 74, 76, 78, 80, 82, 84, 86),
+                   include.lowest = TRUE,
+                   labels = c("70.1-72", "72.1-74", "74.1-76", "76.1-78", "78.1-80", "80.1-82", "82.1-84", "84.1-86") )
+data_for_histogram2020$sections <- sections2020
+
+sections2019 <- cut( data_for_histogram2019$Wszyscy2019,
+                   breaks = c(70, 72, 74, 76, 78, 80, 82, 84, 86),
+                   include.lowest = TRUE,
+                   labels = c("70.1-72", "72.1-74", "74.1-76", "76.1-78", "78.1-80", "80.1-82", "82.1-84", "84.1-86") )
+data_for_histogram2019$sections <- sections2019
+
+sections2018 <- cut( data_for_histogram2018$Wszyscy2018,
+                   breaks = c(70, 72, 74, 76, 78, 80, 82, 84, 86),
+                   include.lowest = TRUE,
+                   labels = c("70.1-72", "72.1-74", "74.1-76", "76.1-78", "78.1-80", "80.1-82", "82.1-84", "84.1-86") )
+data_for_histogram2018$sections <- sections2018
+
+sections2017 <- cut( data_for_histogram2017$Wszyscy2017,
+                   breaks = c(70, 72, 74, 76, 78, 80, 82, 84, 86),
+                   include.lowest = TRUE,
+                   labels = c("70.1-72", "72.1-74", "74.1-76", "76.1-78", "78.1-80", "80.1-82", "82.1-84", "84.1-86") )
+data_for_histogram2017$sections <- sections2017
+
+
+ramka_danych <- bind_rows(data_for_histogram2021, data_for_histogram2020, data_for_histogram2019, data_for_histogram2018, data_for_histogram2017)
+
+ramka_danych$Rok <- factor(ramka_danych$Rok)
+
+ggplot(data = ramka_danych, aes(x = sections)) +
+  geom_bar(position = "dodge") +
+  geom_text(stat = "count", aes(label = ..count..), position = position_dodge(width = 0.9), vjust = -0.5, size = 6) +
+  labs(title = "",
+       x = "Przedziały wiekowe",
+       y = "Liczba państw") +
+  theme_minimal(base_size = 25) +
+  facet_grid(Rok ~ ., scales="free_y", space="free_y") +
+  scale_y_continuous(limits = c(0, max(18))) 
+  
+```
+
+```{r, echo=FALSE, include=FALSE}
+dev.off()
+```
+
+### Na pierwszy rzut oka widać, że na przestrzeni lat 2019-2021 pojawiło się więcej wartości w słupkach reprezentujących przedziały wiekowe poniżej 78 roku życia. 
+
+### Zbadajmy jeszcze wskaźniki:
+#### Wartość najmniejsza, dolny kwartyl, mediana, średnia, górny kwartyl, wartość największa:
+```{r, echo=FALSE}
+ramka_danych <- na.omit(ramka_danych)
+summary(ramka_danych[,2])
+```
+#### Wariancja:
+```{r, echo=FALSE}
+var(ramka_danych[,2])
+```
+#### Odchylenie standardowe:
+```{r, echo=FALSE}
+sd(ramka_danych[,2])
+```
+#### Odchylenie przeciętne:
+```{r, echo=FALSE}
+mad(ramka_danych[,2])
+```
+#### Zakres:
+```{r, echo=FALSE}
+range(ramka_danych[,2])
+```
+#### Rozstęp kwartylowy:
+```{r, echo=FALSE}
+IQR(ramka_danych[,2])
+```
+#### Moda:
+```{r, echo=FALSE}
+Mode(ramka_danych[,2])
+```
+
+
+## **Punkt 3.2 - Liczba wystąpień poszczególnych średnich długości życia z podziałem na rok, płeć i państwo**
+```{r, echo=FALSE, fig.width=15, fig.height=15, warning=FALSE}
+countries <- clear_data$Panstwo
+men2021 <- clear_data$Mezczyzni2021
+women2021 <- clear_data$Kobiety2021
+avg2021 <- clear_data$Wszyscy2021
+men2020 <- clear_data$Mezczyzni2020
+women2020 <- clear_data$Kobiety2020
+avg2020 <- clear_data$Wszyscy2020
+men2019 <- clear_data$Mezczyzni2019
+women2019 <- clear_data$Kobiety2019
+avg2019 <- clear_data$Wszyscy2019
+men2018 <- clear_data$Mezczyzni2018
+women2018 <- clear_data$Kobiety2018
+avg2018 <- clear_data$Wszyscy2018
+men2017 <- clear_data$Mezczyzni2017
+women2017 <- clear_data$Kobiety2017
+avg2017 <- clear_data$Wszyscy2017
+
+data_gender2021 <- data.frame(Panstwo = countries,
+                              Mezczyzni = men2021,
+                              Kobiety = women2021,
+                              Ogolnie = avg2021)
+
+data_gender2020 <- data.frame(Panstwo = countries,
+                              Mezczyzni = men2020,
+                              Kobiety = women2020,
+                              Ogolnie = avg2020)
+
+data_gender2019 <- data.frame(Panstwo = countries,
+                              Mezczyzni = men2019,
+                              Kobiety = women2019,
+                              Ogolnie = avg2019)
+
+data_gender2018 <- data.frame(Panstwo = countries,
+                              Mezczyzni = men2018,
+                              Kobiety = women2018,
+                              Ogolnie = avg2018)
+
+data_gender2017 <- data.frame(Panstwo = countries,
+                              Mezczyzni = men2017,
+                              Kobiety = women2017,
+                              Ogolnie = avg2017)
+
+data_gender2021$Rok <- "2021"
+data_gender2020$Rok <- "2020"
+data_gender2019$Rok <- "2019"
+data_gender2018$Rok <- "2018"
+data_gender2017$Rok <- "2017"
+
+ramka_danych_diagram <- bind_rows(data_gender2017, data_gender2018, data_gender2019, data_gender2020, data_gender2021)
+ramka_danych_diagram$Rok <- factor(ramka_danych_diagram$Rok)
+
+ggplot(ramka_danych_diagram, aes(x = Panstwo, group = Rok)) +
+  geom_point(aes(y = Mezczyzni, color = "Mężczyźni"), size = 5) +
+  geom_point(aes(y = Kobiety, color = "Kobiety"), size = 5) +
+  geom_line(aes(y = Ogolnie, color = "Średnia"), size = 1.5) +
+  facet_wrap(~ Rok, scales = "free_y", ncol = 1) +
+  labs(title = "Średnia długość życia w różnych krajach",
+       x = "Państwo",
+       y = "Długość życia") +
+  theme_minimal(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r, echo=FALSE, include=FALSE}
+dev.off()
+```
+
+### Po dokładnym przeanalizowaniu tych wykresów możemy zaobserwować spadki średniej długości życia w niektórych państwach Europy. Najbardziej widoczne są zmiany na wykresie z roku 2020. Pandemia najmocniej poruszyła Liechtenstein, Północną Macedonię oraz Litwę. 
+
+
+### Na sam koniec zbadajmy wskaźniki:
+#### Wartość najmniejsza, dolny kwartyl, mediana, średnia, górny kwartyl, wartość największa:
+```{r, echo=FALSE}
+ramka_danych_diagram <- na.omit(ramka_danych_diagram)
+summary(ramka_danych_diagram[,2])
+```
+#### Wariancja:
+```{r, echo=FALSE}
+var(ramka_danych_diagram[,2])
+```
+#### Odchylenie standardowe:
+```{r, echo=FALSE}
+sd(ramka_danych_diagram[,2])
+```
+#### Odchylenie przeciętne:
+```{r, echo=FALSE}
+mad(ramka_danych_diagram[,2])
+```
+#### Zakres:
+```{r, echo=FALSE}
+range(ramka_danych_diagram[,2])
+```
+#### Rozstęp kwartylowy:
+```{r, echo=FALSE}
+IQR(ramka_danych_diagram[,2])
+```
+#### Moda:
+```{r, echo=FALSE}
+Mode(ramka_danych_diagram[,2])
+```
+
+
+# **Punkt 4 - Analiza zależności zmiennych**
+
+## **Punkt 4.1 - Zmiana średniej długości życia na przestrzeni lat 2017-2021**
+```{r, echo=FALSE, warning=FALSE, fig.width=15, fig.height=10}
+min2021 <- min(clear_data$Wszyscy2021, na.rm = TRUE)
+min2020 <- min(clear_data$Wszyscy2020, na.rm = TRUE)
+min2019 <- min(clear_data$Wszyscy2019, na.rm = TRUE)
+min2018 <- min(clear_data$Wszyscy2018, na.rm = TRUE)
+min2017 <- min(clear_data$Wszyscy2017, na.rm = TRUE)
+
+max2021 <- max(clear_data$Wszyscy2021, na.rm = TRUE)
+max2020 <- max(clear_data$Wszyscy2020, na.rm = TRUE)
+max2019 <- max(clear_data$Wszyscy2019, na.rm = TRUE)
+max2018 <- max(clear_data$Wszyscy2018, na.rm = TRUE)
+max2017 <- max(clear_data$Wszyscy2017, na.rm = TRUE)
+
+dane <- data.frame(
+  Rok = c(2017, 2018, 2019, 2020, 2021),
+  Minimum = c(min2017, min2018, min2019, min2020, min2021),
+  Maksimum = c(max2017, max2018, max2019, max2020, max2021)
+)
+
+ggplot(dane, aes(x = Rok)) +
+  geom_line(aes(y = Minimum, color = "Min"), size = 1.5) +
+  geom_line(aes(y = Maksimum, color = "Max"), size = 1.5) +
+  geom_ribbon(aes(ymin = Minimum, ymax = Maksimum),
+              alpha = 0.2, color = NA) +
+  labs(title = "Wykres linii średniej długości życia w Europie (Min-Max)",
+       x = "Rok",
+       y = "Średnia długość życia") +
+  scale_color_manual(values = c("Min" = "blue", "Max" = "red"), name = "Wiek") +
+  scale_fill_manual(values = "gray") +
+  theme_minimal(base_size = 20)
+```
+```{r, echo=FALSE, include=FALSE}
+dev.off()
+```
+### Wniosek:
+### Zauważyć możemy duży spadek wartości maksymalnej w 2020 roku, która odpowiada nam za największą średnią długość życia w Europie, oraz progresyjny spadek wartości minimalnej od roku 2019, odpowiadającej najmniejszej długości życia od roku 2019.
+### Myśląc o podanych latach, nasuwa nam się od razu pandemia COVID-19. To ona musiała mieć wpływ na tak gwałtowne różnice w średnim wieku ludności Europy. 
+
+## **Punkt 4.2 - Wpływ epidemii COVID-19 na średnią długość życia w poszczególnych państwach (różnica między 2021 a 2019 rokiem)**
+```{r, echo=FALSE, fig.width=15, fig.height=10}
+countries <- clear_data$Panstwo
+avg_2021 <- clear_data$Wszyscy2021
+avg_2019 <- clear_data$Wszyscy2019
+
+data_covid <- data.frame(Panstwo = countries,
+                         DlugoscZycia2019 = avg_2019,
+                         DlugoscZycia2021 = avg_2021)
+data_covid <- na.omit(data_covid)
+
+ggplot(data_covid, aes(x = Panstwo, group=1)) +
+  geom_line(aes(y = DlugoscZycia2019, color = "2019"), size = 1.5) +
+  geom_line(aes(y = DlugoscZycia2021, color = "2021"), size = 1.5) +
+  labs(title = "Średnia długość życia (2019 vs. 2021)",
+       x = "Państwo",
+       y = "Średnia długość życia") +
+  scale_color_manual(values = c("2019" = "red", "2021" = "blue"), name="Rok") +
+  theme_minimal(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+```{r, echo=FALSE, include=FALSE}
+dev.off()
+```
+### Wniosek:
+### Na tym wykresie możemy idealnie zaobserwować prawdziwe skutki epidemii. Bardzo mocno dotknęła długość życia obywateli Bułgarii, Rumunii, Serbii oraz Słowacji. Potwierdziło się moje założenie, że w ciągu ostatnich lat, największy wpływ na regresję średniej długości życia w Europie wpłynął COVID-19.
+
+##### Róźnice w wymienionych wyżej państwach (w latach):
+###### Bułgaria
+```{r, echo=FALSE}
+bulgaria_data <- subset(data_covid, Panstwo == "Bulgaria")
+bulgaria_data$DlugoscZycia2021 - bulgaria_data$DlugoscZycia2019
+```
+
+###### Rumunia
+```{r, echo=FALSE}
+romania_data <- subset(data_covid, Panstwo == "Romania")
+romania_data$DlugoscZycia2021 - romania_data$DlugoscZycia2019
+```
+
+###### Serbia
+```{r, echo=FALSE}
+serbia_data <- subset(data_covid, Panstwo == "Serbia")
+serbia_data$DlugoscZycia2021 - serbia_data$DlugoscZycia2019
+```
+
+###### Słowacja
+```{r, echo=FALSE}
+slovakia_data <- subset(data_covid, Panstwo == "Slovakia")
+slovakia_data$DlugoscZycia2021 - slovakia_data$DlugoscZycia2019
+```
+
+##### Test t-studenta dla par zależnych (obserwacja tych samych państw w latach 2019 i 2021):
+```{r, echo=FALSE}
+t.test(data_covid$DlugoscZycia2021, data_covid$DlugoscZycia2019, paired = TRUE)
+```
+##### Dzięki temu testowi możemy zauważyć, że średnia różnica długości życia w Europie między rokiem 2019 a 2021 wyniosła około -1.35 roku.
+
+
+## **Punkt 4.3 - Zależność średniej długości życia w Europie w 2021 roku od płci**
+```{r, echo=FALSE, fig.width=15, fig.height=10, warning=FALSE}
+countries <- clear_data$Panstwo
+men2021 <- clear_data$Mezczyzni2021
+women2021 <- clear_data$Kobiety2021
+avg2021 <- clear_data$Wszyscy2021
+
+data_gender2021 <- data.frame(Panstwo = countries,
+                              Mezczyzni = men2021,
+                              Kobiety = women2021,
+                              Ogolnie = avg2021)
+
+ggplot(data_gender2021, aes(x = Ogolnie)) +
+  geom_point(aes(y = Mezczyzni, color = "Mężczyzna"), size = 5) +
+  geom_point(aes(y = Kobiety, color = "Kobieta"), size = 5) +
+  geom_smooth(aes(y = Mezczyzni), method = "lm", se = TRUE, color = "blue", size = 1) +
+  geom_smooth(aes(y = Kobiety), method = "lm", se = TRUE, color = "pink", size = 1) +
+  geom_smooth(aes(y = Ogolnie), method = "lm", se = TRUE, color = "grey", size = 1) +
+  labs(title = "Zależność średniej długości życia w Europie w 2021 roku od płci",
+       x = "Średnia ogólna długość życia",
+       y = "Średnia długość życia z podziałem na płeć") +
+  scale_color_manual(values = c("Mężczyzna" = "blue", "Kobieta" = "pink"), name="Płeć") +
+  theme_minimal(base_size = 20) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r, echo=FALSE, include=FALSE}
+dev.off()
+```
+##### Przeprowadzimy test t-studenta dla par zależnych między długością życia mężczyzn a ogólną średnią długością życia.
+```{r, echo=FALSE}
+t.test(data_gender2021$Mezczyzni, data_gender2021$Ogolnie, paired = TRUE)
+```
+##### Jak możemy zauważyć, średnia różnica długości życia mężczyzn różni się od średniej długości życia w Europie o -2.72 roku.
+
+##### A teraz test t-studenta dla par zależnych między długością życia kobiet a ogólną średnią długością życia.
+```{r, echo=FALSE}
+t.test(data_gender2021$Kobiety, data_gender2021$Ogolnie, paired = TRUE)
+```
+##### Jak możemy zauważyć, średnia różnica długości życia kobiet różni się od średniej długości życia w Europie o około +2.75 roku.
+
+##### Aby potwierdzić jeszcze liniową zależność wykresów, wykonałem testy korelacji:
+###### - Mężczyzn:
+```{r, echo=FALSE}
+cor.test(data_gender2021$Ogolnie, data_gender2021$Mezczyzni)
+```
+###### - Kobiet:
+```{r, echo=FALSE}
+cor.test(data_gender2021$Ogolnie, data_gender2021$Kobiety)
+```
+##### Wyniki testu potwierdzają, że zależność między dotychczasową średnią długością życia mężczyzn, a poszczególnymi punktami jest wręcz idealnie liniowa. Oszacowany współczynnik korelacji wynosi prawie 0.99, a 95% przedział ufności - od 0.979 do 0.994. Natomiast w przypadku kobiet współczynnik osiągnął wartość lekko ponad 0.98, przy również 95% przedziale ufności będącym od 0.968 do 0.991, zatem również jest to prawie liniowa zależność.
+
+
+## **Punkt 4.4 - Regresja liniowa średniej długości życia mężczyzn w Europie w latach 2017-2021**
+```{r, echo=FALSE, fig.width=15, fig.height=10}
+countries <- clear_data$Panstwo
+men2021 <- clear_data$Mezczyzni2021
+men2020 <- clear_data$Mezczyzni2020
+men2019 <- clear_data$Mezczyzni2019
+men2018 <- clear_data$Mezczyzni2018
+men2017 <- clear_data$Mezczyzni2017
+
+data_men <- data.frame(Panstwo = countries,
+                       Men_2017 = men2017,
+                       Men_2018 = men2018,
+                       Men_2019 = men2019,
+                       Men_2020 = men2020,
+                       Men_2021 = men2021)
+
+data_men <- na.omit(data_men)
+
+data_men_long <- pivot_longer(data_men, 
+                              cols = starts_with("Men_"),
+                              names_to = "Rok", 
+                              values_to = "Dlugosc")
+
+data_men_long$Rok <- as.numeric(gsub("Men_", "", data_men_long$Rok))
+
+ggplot(data_men_long, aes(x = as.numeric(Rok), y = Dlugosc)) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue", formula = y ~ x) +
+  geom_hline(yintercept = 76.5, linetype = "dashed", color = "purple") +
+  labs(title = "Regresja liniowa długości życia mężczyzn w Europie",
+       x = "Rok",
+       y = "Długość życia") +
+  theme_minimal(base_size=20)
+```
+
+```{r, echo=FALSE, include=FALSE}
+dev.off()
+```
+
+```{r, echo=FALSE}
+test <- lm(Dlugosc ~ as.numeric(Rok), data = data_men_long)
+coef(test)[2]
+```
+##### Średni spadek długości życia mężczyzn na rok. Przy takiej wartości możemy zauważyć, że mniej więcej na początku 2022 roku, średnia długość życia mężczyzn w Europie wyniosła by już mniej niż 76.5 roku, a w 2024 roku byłoby to niecałe 76 lat. (Jestem szczerze ciekaw ile aktualnie wynosi, gdyż robię ten projekt w 2024 roku :D)
+
+
+## **Punkt 4.5 - Regresja liniowa średniej długości życia kobiet w Europie w latach 2017-2021**
+```{r, echo=FALSE, fig.width=15, fig.height=10}
+countries <- clear_data$Panstwo
+women2021 <- clear_data$Kobiety2021
+women2020 <- clear_data$Kobiety2020
+women2019 <- clear_data$Kobiety2019
+women2018 <- clear_data$Kobiety2018
+women2017 <- clear_data$Kobiety2017
+
+data_women <- data.frame(Panstwo = countries,
+                       Women_2017 = women2017,
+                       Women_2018 = women2018,
+                       Women_2019 = women2019,
+                       Women_2020 = women2020,
+                       Women_2021 = women2021)
+
+data_women <- na.omit(data_women)
+
+data_women_long <- pivot_longer(data_women, 
+                              cols = starts_with("Women_"),
+                              names_to = "Rok", 
+                              values_to = "Dlugosc")
+
+data_women_long$Rok <- as.numeric(gsub("Women_", "", data_women_long$Rok))
+
+ggplot(data_women_long, aes(x = as.numeric(Rok), y = Dlugosc)) +
+  geom_smooth(method = "lm", se = FALSE, color = "pink", formula = y ~ x) +
+  geom_hline(yintercept = 82, linetype = "dashed", color = "red") +
+  labs(title = "Regresja liniowa długości życia kobiet w Europie",
+       x = "Rok",
+       y = "Długość życia") +
+  theme_minimal(base_size=20)
+```
+
+```{r, echo=FALSE, include=FALSE}
+dev.off()
+```
+
+```{r, echo=FALSE}
+test <- lm(Dlugosc ~ as.numeric(Rok), data = data_women_long)
+coef(test)[2]
+```
+##### Średni spadek długości życia kobiet na rok. Przy takiej wartości możemy zauważyć, że mniej więcej na początku kwietnia 2022 roku, średnia długość życia kobiet w Europie wyniosła by już mniej niż 82 lata.
+
+
+# Punkt 5 - Podsumowanie
+### Możemy dojść do konkluzji, że faktycznie pandemia COVID-19 miała duży wpływ na spadek średniej długości życia w Europie. Niestety dane, które są aktualnie dostępne, nie są wystarczające, aby stwierdzić, czy regresja będzie się utrzymywała przez następne lata. 
+### Dzięki użyciu środowiska R oraz nabytej wiedzy podczas całego przedmiotu "Rachunek prawdopodobieństwa i statystyka", byłem w stanie odpowiedzieć na kilka nurtujących mnie od liceum pytań związanych z długością życia w Europie. Zyskałem także podstawową wiedzę z praktycznego używatkowania języka R do rozwiązywania problemów statystycznych.
+### Wykorzystane biblioteki: DBI - łączenie się z bazą danych, knitr - dynamiczne generowanie raportów, rmarkdown - stworzenie całego notebooka, dplyr i tidyr - ułatwienie modyfikacji danych oraz pomoc w zachowaniu czystego i przejrzystego kodu, ggplot2 - rysowanie wykresów, DescTools - wykorzystany do wyliczania mody 
+
+
+```{r, echo=FALSE}
+dbDisconnect(connection)
+```
